@@ -52,20 +52,14 @@ inputs:
   action:
     description: >
       Determines what this action will do when it is executed. Supported
-      values: `deploy`, `remove`, `auto` (default).
+      values: `deploy`, `remove`.
 
       If set to `deploy`, will attempt to deploy the preview and overwrite
       any existing preview in that location.
+
       If set to `remove`, will attempt to remove the preview in that
       location.
-
-      If set to `auto`, the action will try to determine whether to deploy
-      or remove the preview. It will deploy the preview on
-      `pull_request.types.synchronize` and `.opened` events, and remove it
-      on `pull_request.types.closed` events. It will not do anything for
-      all other events. `auto` is the default value.
-    required: false
-    default: auto
+    required: true
 
   # Parameters for simulating a pull request
   pr-number:
@@ -97,6 +91,11 @@ runs:
         deployrepo: ${{ inputs.deploy-repository }}
         token: ${{ inputs.token }}
       run: |
+        if [ -z "$action" ]; then
+          echo "::error::Action input is required (deploy/remove)" >&2
+          exit 1
+        fi
+
         org=$(echo "$deployrepo" | cut -d "/" -f 1)
         thirdleveldomain=$(echo "$deployrepo" | cut -d "/" -f 2)
 
