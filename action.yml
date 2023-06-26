@@ -26,6 +26,10 @@ inputs:
       when removing a preview.
     required: false
     default: ""
+  custom-url:
+    description: Custom pages URL
+    required: false
+    default: ""
   action:
     description: >
       Determines what this action will do when it is executed. Supported
@@ -64,6 +68,7 @@ runs:
         pr: ${{ inputs.pr-number }}
         actionref: ${{ github.action_ref }}
         actionrepo: ${{ github.action_repository }}
+        customurl: ${{ inputs.custom-url }}
       run: |
         if [ -z "$action" ]; then
           echo "::error::Action input is required (deploy/remove)" >&2
@@ -100,10 +105,12 @@ runs:
         echo "debug_org=$org" >> $GITHUB_ENV
         echo "debug_thirdleveldomain=$thirdleveldomain" >> $GITHUB_ENV
 
-        if [ "$org" == "$thirdleveldomain" ]; then
+        if [ ! -z "$customurl" ]; then
+          pagesurl="$customurl"
+        elif [ "${org}.github.io" == "$thirdleveldomain" ]; then
           pagesurl="${org}.github.io"
         else
-          pagesurl=$(echo "$GITHUB_REPOSITORY" | sed 's/\//.github.io\//')
+          pagesurl=$(echo "$deployrepo" | sed 's/\//.github.io\//')
         fi
 
         echo "pagesurl=$pagesurl" >> $GITHUB_ENV
