@@ -17,16 +17,18 @@ while getopts "p:f:" opt; do
 done
 
 if [ -z "$github_repository" ] || [ -z "$git_ref" ]; then
-  echo "some parameters are empty" >&2
+  echo >&2 "some parameters are empty"
   helpFunction
 fi
 
-echo "Cloning repository $github_repository at ref $git_ref" >&2
+echo >&2 "Determining Git tag for $github_repository/$git_ref"
+
+echo >&2 "Cloning repository $github_repository at ref $git_ref"
 git clone --bare --single-branch --branch "$git_ref" "https://github.com/$github_repository" bare_pr_preview
 
 cd bare_pr_preview || exit 1
 
-action_version=$(git describe --tags || git rev-parse HEAD)
+action_version=$(git describe --tags --match "v*.*.*" || git describe --tags || git rev-parse HEAD)
 
 echo "$action_version"
 exit 0

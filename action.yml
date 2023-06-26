@@ -9,7 +9,14 @@ branding:
   color: yellow
 
 inputs:
-  # Main parameters
+  token:
+    description: >
+      The token to use for the deployment.
+      Default is GITHUB_TOKEN in the current repository.
+      If you need more permissions for things such as deploying to another
+      repository, you can add a Personal Access Token (PAT).
+    required: false
+    default: ${{ github.token }}
   preview-branch:
     description: Branch on which the previews will be deployed.
     required: false
@@ -24,6 +31,22 @@ inputs:
 
       Required when deploying a preview; will raise a warning if specified
       when removing a preview.
+    required: false
+    default: .
+  deploy-repository:
+    description: >
+      The GitHub repository to deploy the preview to.
+      This should be formatted like `<org name>/<repo name>`, e.g.
+      `rossjrw/pr-preview-action`.
+      Defaults to the current repository.
+
+      You will need to add a Personal Access Token (PAT) in the `token` input
+      in order to allow the action running in one repository to make changes
+      to another repository.
+    required: false
+    default: ${{ github.repository }}
+  custom-url:
+    description: Custom pages URL
     required: false
     default: ""
   action:
@@ -64,21 +87,27 @@ runs:
         pr: ${{ inputs.pr-number }}
         actionref: ${{ github.action_ref }}
         actionrepo: ${{ github.action_repository }}
+        customurl: ${{ inputs.custom-url }}
+        deployrepo: ${{ inputs.deploy-repository }}
+        token: ${{ inputs.token }}
       run: |
         if [ -z "$action" ]; then
           echo "::error::Action input is required (deploy/remove)" >&2
           exit 1
         fi
 
-        if [ "$action" != "deploy" ] && [ "$action" != "remove" ]; then
-          echo "::error::Unknown action $action" >&2
-          exit 1
+        org=$(echo "$deployrepo" | cut -d "/" -f 1)
+        thirdleveldomain=$(echo "$deployrepo" | cut -d "/" -f 2)
+
+        if [ ! -z "$customurl" ]; then
+          pagesurl="$customurl"
+        elif [ "${org}.github.io" == "$thirdleveldomain" ]; then
+          pagesurl="${org}.github.io"
+        else
+          pagesurl=$(echo "$deployrepo" | sed 's/\//.github.io\//')
         fi
 
-        if [ "$action" = "deploy" ] && [ -z "$source_dir" ]; then
-          echo "::error::Source dir must be defined when deploying" >&2
-          exit 1
-        fi
+        echo "pagesurl=$pagesurl" >> $GITHUB_ENV
 
         if [ "$action" = "remove" ] && [ -n "$source_dir" ]; then
           echo "::warning::Source dir should not be defined when removing" >&2
@@ -124,10 +153,17 @@ runs:
         echo "action_version=$version" >> "$GITHUB_ENV"
       shell: bash
 
+    - name: Determine auto action
+      if: env.action == 'auto'
+      run: $GITHUB_ACTION_PATH/lib/determine-auto-action.sh
+      shell: bash
+
     - name: Deploy preview directory
       if: env.action == 'deploy'
       uses: JamesIves/github-pages-deploy-action@v4
       with:
+        token: ${{ env.token }}
+        repository-name: ${{ env.deployrepo }}
         branch: ${{ inputs.preview-branch }}
         folder: ${{ inputs.source-dir }}
         target-folder: ${{ env.targetdir }}
@@ -136,7 +172,7 @@ runs:
 
     - name: Expose deployment URL
       id: url
-      run: echo "::set-output name=url::https://${{ env.pagesurl }}/${{ env.targetdir }}/"
+      run: echo "url=https://${{ env.pagesurl }}/${{ env.targetdir }}/"  >> $GITHUB_OUTPUT
       shell: bash
 
     - name: Leave a comment after deployment
@@ -165,6 +201,8 @@ runs:
       if: env.action == 'remove'
       uses: JamesIves/github-pages-deploy-action@v4
       with:
+        token: ${{ env.token }}
+        repository-name: ${{ env.deployrepo }}
         branch: ${{ inputs.preview-branch }}
         folder: ${{ env.emptydir }}
         target-folder: ${{ env.targetdir }}
